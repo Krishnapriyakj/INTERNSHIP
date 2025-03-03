@@ -1,0 +1,12 @@
+"""NCD assessment questions."""
+
+NCD_QUESTIONS = [
+    {"question": "Are you male or female?", "key": "gender", "valid_answers": ["male", "female"]},
+    {"question": "Do you smoke?", "key": "smoke", "valid_answers": ["yes", "no"]},
+    {"question": "How many cigarettes do you smoke per day?", "key": "cigarettes_per_day", "valid_answers": "numeric", "depends_on": "smoke", "condition": "yes"},
+    {"question": "Are you exposed to smoking (passive smoking)?", "key": "passive_smoke", "valid_answers": ["yes", "no"]},
+    {"question": "Do you consume alcohol?", "key": "alcohol", "valid_answers": ["yes", "no"]},
+    {"question": "How often do you consume alcohol?", "key": "alcohol_frequency", "valid_answers": "numeric", "depends_on": "alcohol", "condition": "yes"},
+    {"question": "Any nipple discharge?", "key": "nipple_discharge", "valid_answers": ["yes", "no"], "depends_on": "gender", "condition": "female"},
+    {"question": "Any post-menopausal bleeding?", "key": "post_menopause_bleeding", "valid_answers": ["yes", "no"], "depends_on": "gender", "condition": "female"},
+]
