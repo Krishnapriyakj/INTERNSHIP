@@ -1,0 +1,33 @@
+{
+    "risks": {
+      "Respiratory Health": true,
+      "Cardiovascular Health": true,
+      "Overall Well-being": true
+    },
+    "recommendations": {
+      "Respiratory Health": {
+        "smoke": "Consider reducing or quitting smoking. Support groups and medical guidance can help.",
+        "passive_smoke": "Avoid areas with high smoke exposure to reduce health risks."
+      },
+      "Cardiovascular Health": {
+        "alcohol": "Reduce alcohol intake and monitor blood pressure regularly."
+      },
+      "Overall Well-being": {
+        "nipple_discharge": "Consult a doctor to rule out any health concerns.",
+        "post_menopause_bleeding": "Seek medical advice to ensure early detection and treatment."
+      }
+    },
+    "risk_details": {
+      "Respiratory Health": {
+        "smoke": "Smoking increases the risk of lung disease, chronic bronchitis, and lung cancer.",
+        "passive_smoke": "Exposure to passive smoking may increase respiratory and cardiovascular risks."
+      },
+      "Cardiovascular Health": {
+        "alcohol": "Frequent alcohol consumption can increase the risk of high blood pressure and heart disease."
+      },
+      "Overall Well-being": {
+        "nipple_discharge": "Nipple discharge may require medical evaluation for potential underlying issues.",
+        "post_menopause_bleeding": "Post-menopausal bleeding should be checked by a doctor as it could indicate health issues."
+      }
+    }
+  }
