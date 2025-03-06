@@ -1,123 +1,78 @@
-# Chroma Integration with LangChain and Ollama
+# eHealth Chatbot Project
+## Overview
 
-This project demonstrates how to use Chroma as a vector database, Ollama embeddings, and a language model to process queries and retrieve relevant document-based responses.
+This project is an **eHealth Chatbot** built using **FastAPI**, **LangChain**, **Ollama (Llama3.2)**, and **ChromaDB**. It provides medical Q&A, **cancer and NCD (Non-Communicable Disease) risk assessment**, and **hospital appointment scheduling with token generation**.
 
-## Setup Instructions for Windows
+## Features
 
-### 1. Clone the Repository
+- **Conversational AI**: Uses LangChain with Llama3.2 to answer health-related questions.
+- **Retrieval-Augmented Generation (RAG)**: Retrieves relevant medical documents from ChromaDB for accurate responses.
+- **giveCancer & NCD Risk Assessment**: Asks structured health-related questions to assess risk levels.
+- **Hospital Appointment Booking**: Schedules appointments with token generation for seamless hospital visits.
+- **Session-based Assessment**: Maintains user responses and adapts the next questions accordingly.
 
-If you haven't already cloned the repository, open your terminal (Command Prompt, PowerShell, or Windows Terminal) and run:
+## Project Structure
 
-```bash
-git clone <repository-url>
-cd <repository-folder>
+```
+├── main.py                # Main application entry point
+├── config.py              # Configuration settings
+├── models/
+│   └── schema.py          # Pydantic models/schemas
+├── services/
+│   ├── llm_service.py     # LLM and embeddings functionality
+│   ├── rag_service.py     # RAG retrieval functionality
+│   ├── ncd_service.py     # NCD and cancer assessment logic
+│   └── appointment_service.py # Hospital appointment & token generation logic
+├── data/
+│   └── ncd_questions.json # NCD questions, risks, recommendations
+├── api/
+│   └── routes.py          # API endpoints
+├── requirements.txt       # Project dependencies
+├── README.md              # Project documentation
 ```
 
-Replace `<repository-url>` with the actual repository URL.
+## Installation
 
----
+### Prerequisites
 
-### 2. Activate the Virtual Environment
+- Python 3.9+
+- [Ollama](https://ollama.com/) installed and running
+- FastAPI & Uvicorn
 
-Activate the `venv` environment using the following command:
+### Setup
 
-- **Command Prompt**:
+1. Clone the repository:
+   ```sh
+   git clone <repository-url>
+   cd <repository-folder>
+   ```
+2. Install dependencies:
+   ```sh
+   pip install -r requirements.txt
+   ```
+3. Start the FastAPI server:
+   ```sh
+   python main.py
+   ```
+4. Access the API at:
+   ```
+   http://127.0.0.1:8000/docs
+   ```
 
-  ```bash
-  venv\Scripts\activate
-  ```
+## API Endpoints
 
-- **PowerShell**:
+| Method | Endpoint        | Description                                      |
+| ------ | --------------- | ------------------------------------------------ |
+| POST   | `/chat/`        | Chat with the AI for health queries & assessment |
 
-  ```bash
-  .\venv\Scripts\Activate.ps1
-  ```
+## Usage
 
-- **Git Bash** (or other bash shell):
-  ```bash
-  source venv/Scripts/activate
-  ```
+- Ask general medical questions.
+- Start a **cancer or NCD risk assessment** by mentioning "NCD risk" or "Cancer risk" in the chat.
+- Answer a sequence of questions to receive a risk evaluation.
+- Book a hospital appointment and receive a **token for your visit**.
 
-You should see `(venv)` at the beginning of your terminal prompt, indicating that the virtual environment is active.
+## License
 
----
+This project is licensed under the MIT License.
 
-### 3. Install Dependencies
-
-Install the required Python packages using `pip`:
-
-```bash
-pip install -r requirements.txt
-```
-
-This will install all dependencies, including `langchain`, `chroma`, `ollama`, and others.
-
----
-
-### 4. Set Up Chroma Database and Prepare Files
-
-1. Place your PDF files in the folder named `test`. You can create this folder if it doesn't exist.
-2. Run the indexing script to populate your Chroma database with document embeddings:
-
-```bash
-python your_indexing_script.py
-```
-
-Replace `your_indexing_script.py` with the filename of the script you are using for indexing, e.g., `main.py`.
-
----
-
-### 5. Query the System
-
-To use the query system, run the query script:
-
-```bash
-python your_query_script.py
-```
-
-Replace `your_query_script.py` with the filename of the query-related script, e.g., `query.py`.
-
-Follow the prompts to enter your query. The system will process the query and provide a response based on the documents stored in the Chroma database.
-
----
-
-### 6. Deactivate the Virtual Environment
-
-Once you're done, deactivate the virtual environment:
-
-```bash
-deactivate
-```
-
----
-
-## Troubleshooting
-
-- **PowerShell Execution Policy Error**:  
-  If you encounter an error like `execution of scripts is disabled on this system`, you need to allow script execution. Run the following in an _elevated PowerShell_ (run as Administrator):
-
-  ```bash
-  Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-  ```
-
-- **Dependencies Issue**:  
-  Ensure that all required libraries are listed in `requirements.txt`. You can generate this file using:
-
-  ```bash
-  pip freeze > requirements.txt
-  ```
-
----
-
-## Notes
-
-- This project is developed and tested using a Linux environment. Windows users may need to adapt paths (use `\` instead of `/`).
-- Ensure that the `chroma_db` directory is accessible and properly configured.
-
----
-
-Feel free to reach out if you have any issues setting up or using this project! 😊
-
----
-
-Let me know if you need changes or further clarification!
