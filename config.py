@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-import os
+from pydantic import ConfigDict  # Import ConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "Conversational NCD Chatbot"
@@ -11,8 +11,6 @@ class Settings(BaseSettings):
     ollama_model: str = "llama3.2"
     embedding_model: str = "nomic-embed-text"
 
-    class Config:
-        env_file = ".env"  # Optional: Load settings from a .env file
-        env_file_encoding = "utf-8"
+    model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 settings = Settings()
