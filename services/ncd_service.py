@@ -2,18 +2,23 @@ import json
 from typing import Dict, Any
 from data import ncd_questions, ncd_risks_recommendations
 
-# Store user sessions (in-memory, for now)
+# Global user sessions (in-memory, for now)
 user_sessions: Dict[str, Dict[str, Any]] = {}
-
 
 def is_user_in_assessment(user_id: str) -> bool:
     """Check if a user is currently undergoing an assessment."""
     return user_id in user_sessions and user_sessions[user_id]["stage"] == "assessment"
 
-
 async def ncd_assessment(user_id: str, user_question: str) -> Dict[str, str]:
     """Handles chatbot queries and dynamically assesses NCD risk within the conversation."""
     user_question = user_question.strip().lower()
+
+    # Check if the user wants to stop the assessment
+    if user_question in ["stop", "exit", "cancel", "end assessment"]:
+        if user_id in user_sessions:
+            # Clean up the session
+            del user_sessions[user_id]
+        return {"response": "Assessment stopped. You can start again anytime by saying 'start assessment'."}
 
     # Initialize session if not exists
     if user_id not in user_sessions:
@@ -53,8 +58,11 @@ async def ncd_assessment(user_id: str, user_question: str) -> Dict[str, str]:
     while True:
         current_index += 1
         if current_index >= len(ncd_questions["questions"]):
-            session["stage"] = "conversation"
-            return {"response": generate_assessment_result(session["answers"])}
+            # Assessment complete
+            result = generate_assessment_result(session["answers"])
+            # Clean up the session
+            del user_sessions[user_id]
+            return {"response": result}
 
         next_question = ncd_questions["questions"][current_index]
         if "depends_on" in next_question:
@@ -64,7 +72,6 @@ async def ncd_assessment(user_id: str, user_question: str) -> Dict[str, str]:
 
         session["question_index"] = current_index
         return {"response": next_question["question"]}
-
 
 def generate_assessment_result(answers):
     """Generates a structured health risk summary based on user responses."""

@@ -1,15 +1,13 @@
-from fastapi import APIRouter, Depends
-from typing import Dict
-
+from fastapi import APIRouter
 from models.schema import QueryRequest
 from services import ncd_service, rag_service
+from typing import Dict
 
 router = APIRouter()
 
-
-@router.post("/chat/", summary="Chat with the AI for health queries and NCD assessment")
+@router.post("/chat/", summary="Chat with the AI for health queries and assessments")
 async def chat(query: QueryRequest) -> Dict[str, str]:
-    """Handles chatbot queries and dynamically assesses NCD risk within the conversation."""
+    """Handles chatbot queries and dynamically assesses risk within the conversation."""
     user_id = query.user_id
     user_question = query.question.strip().lower()
 
