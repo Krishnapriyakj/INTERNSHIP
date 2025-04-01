@@ -21,7 +21,7 @@ This project is an **eHealth Chatbot** built using **FastAPI**, **LangChain**, *
 ├── services/
 │   ├── llm_service.py     # LLM and embeddings functionality
 │   ├── rag_service.py     # RAG retrieval functionality
-│   ├── ncd_service.py     # NCD and cancer assessment logic
+│   ├── ncd_service.py     # NCD assessment
 │   └── appointment_service.py # Hospital appointment & token generation logic
 ├── data/
 │   └── ncd_questions.json # NCD questions, risks, recommendations
