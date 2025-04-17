@@ -1,0 +1,14 @@
+{
+  "questions": [
+    {"question": "Rate your Occupational Hazards (0-9):", "key": "OccuPational Hazards", "type": "numeric"},
+    {"question": "Rate your Alcohol Use (0-9):", "key": "Alcohol use", "type": "numeric"},
+    {"question": "Rate your Passive Smoking (0-9):", "key": "Passive Smoker", "type": "numeric"},
+    {"question": "Rate your Obesity Level (0-9):", "key": "Obesity", "type": "numeric"},
+    {"question": "Rate your Smoking Habit (0-9):", "key": "Smoking", "type": "numeric"},
+    {"question": "Rate your Coughing of Blood Frequency (0-9):", "key": "Coughing of Blood", "type": "numeric"},
+    {"question": "Rate your Balanced Diet (0-9):", "key": "Balanced Diet", "type": "numeric"},
+    {"question": "Rate your Chest Pain Level (0-9):", "key": "Chest Pain", "type": "numeric"},
+    {"question": "Rate your Fatigue Level (0-9):", "key": "Fatigue", "type": "numeric"},
+    {"question": "Rate your Genetic Risk (0-9):", "key": "Genetic Risk", "type": "numeric"}
+  ]
+}

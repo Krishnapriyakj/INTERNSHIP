@@ -1,0 +1,62 @@
+
+{
+  "risks": {
+    "Lung Cancer": true,
+    "Breast Cancer": true,
+    "Colorectal Cancer": true,
+    "Prostate Cancer": true,
+    "Skin Cancer": true
+  },
+  "recommendations": {
+    "Lung Cancer": {
+      "Smoking": "Quit smoking and avoid secondhand smoke exposure.",
+      "Occupational Hazards": "Use protective equipment in hazardous work environments.",
+      "Chest Pain": "Consult a doctor immediately for persistent chest pain.",
+      "Coughing of Blood": "Seek immediate medical attention for hemoptysis."
+    },
+    "Breast Cancer": {
+      "Obesity": "Maintain a healthy weight through diet and exercise.",
+      "Alcohol use": "Limit alcohol consumption to reduce risk.",
+      "Fatigue": "Report unusual fatigue to your healthcare provider."
+    },
+    "Colorectal Cancer": {
+      "Balanced Diet": "Increase fiber intake and reduce red meat consumption.",
+      "Obesity": "Achieve and maintain a healthy weight.",
+      "Fatigue": "Report persistent fatigue to your healthcare provider."
+    },
+    "Prostate Cancer": {
+      "Genetic Risk": "Regular screenings if family history exists.",
+      "Obesity": "Maintain a healthy weight and exercise regularly."
+    },
+    "Skin Cancer": {
+      "Occupational Hazards": "Minimize sun exposure and use protective clothing and sunscreen.",
+      "Genetic Risk": "Regular skin examinations if family history exists."
+    }
+  },
+  "risk_details": {
+    "Lung Cancer": {
+      "Smoking": "Smoking is the leading cause of lung cancer, accounting for about 80% of cases.",
+      "Occupational Hazards": "Exposure to asbestos, radon, and other carcinogens increases lung cancer risk.",
+      "Chest Pain": "Persistent chest pain may indicate lung involvement.",
+      "Coughing of Blood": "Hemoptysis is a serious symptom that requires immediate evaluation."
+    },
+    "Breast Cancer": {
+      "Obesity": "Higher body fat increases estrogen levels, which may raise breast cancer risk.",
+      "Alcohol use": "Regular alcohol consumption is linked to increased breast cancer risk.",
+      "Fatigue": "Unexplained fatigue can be an early sign of various cancers."
+    },
+    "Colorectal Cancer": {
+      "Balanced Diet": "Low-fiber, high-fat diets increase colorectal cancer risk.",
+      "Obesity": "Excess weight increases inflammation and insulin resistance, raising cancer risk.",
+      "Fatigue": "Persistent fatigue may be a sign of anemia from undetected bleeding."
+    },
+    "Prostate Cancer": {
+      "Genetic Risk": "Men with a family history have a higher risk of developing prostate cancer.",
+      "Obesity": "Obesity is associated with more aggressive prostate cancer."
+    },
+    "Skin Cancer": {
+      "Occupational Hazards": "Sun exposure and radiation are major risk factors for skin cancer.",
+      "Genetic Risk": "Fair skin and family history increase skin cancer risk."
+    }
+  }
+}
