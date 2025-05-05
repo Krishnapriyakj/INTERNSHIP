@@ -1,427 +1,519 @@
+# frontend.py
 import streamlit as st
-import pandas as pd
-import json
-import qrcode
+import requests
 import time
-from typing import Dict, Any
-from services import (
-    ncd_service,
-    cancer_service,
-    appointment_service,
-    rag_service,
-    conversation_service
-)
-from models.schema import QueryRequest
-from services.payment_service import process_payment, generate_qr_code
-import matplotlib.pyplot as plt
-from io import BytesIO
-import base64
-st.set_page_config(
-        page_title="Health Assistant",
-        page_icon="🏥",
-        layout="centered",
-        initial_sidebar_state="expanded"
-    )
+import json
+from datetime import datetime
 
-# Custom CSS to make the window smaller and more compact
-st.markdown("""
-    <style>
-        .main > div {
-            max-width: 600px;
-            padding: 1rem;
-        }
-        .stTextInput input, .stSelectbox select, .stNumberInput input {
-            padding: 8px !important;
-            font-size: 14px !important;
-        }
-        .stButton button {
-            padding: 8px 16px !important;
-            font-size: 14px !important;
-        }
-        .stChatMessage {
-            padding: 8px 12px !important;
-            margin-bottom: 8px !important;
-        }
-        .stDataFrame {
-            font-size: 14px !important;
-        }
-        .sidebar .sidebar-content {
-            width: 200px !important;
-        }
-    </style>
-""", unsafe_allow_html=True)
+# FastAPI backend URL
+BACKEND_URL = "http://127.0.0.1:8000"
 
-# Initialize session state
-if 'user_id' not in st.session_state:
-    st.session_state.user_id = None
-if 'user_details' not in st.session_state:
-    st.session_state.user_details = {}
-if 'current_service' not in st.session_state:
-    st.session_state.current_service = None
-if 'conversation_history' not in st.session_state:
-    st.session_state.conversation_history = []
-
-# Load data files
-@st.cache_data
-def load_data():
-    with open("data/ncd_questions.json", "r") as f:
-        ncd_questions = json.load(f)
-    with open("data/cancer_questions.json", "r") as f:
-        cancer_questions = json.load(f)
-    hospital_df = pd.read_excel("HOSPITAL LIST.xlsx")
-    return ncd_questions, cancer_questions, hospital_df
-
-ncd_questions, cancer_questions, hospital_df = load_data()
-
-# Helper functions
-def display_qr_code(name: str, fee: float):
-    """Generate and display QR code for payment"""
-    transaction_id = generate_qr_code(name, fee)
-    st.session_state.transaction_id = transaction_id
-    st.write(f"Please scan the QR code to pay ₹{fee}")
+def init_session_state():
+    """Initialize all session state variables with default values"""
+    defaults = {
+        'user_id': None,
+        'registered': False,
+        'user_details': {},
+        'current_service': None,
+        'appointment_stage': None,
+        'hospital_data_loaded': False,
+        'hospital_departments': [],
+        'available_days': ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+        'ncd_assessment': {
+            'current_question': 0,
+            'answers': {},
+            'questions': None,
+            'loaded': False
+        },
+        'cancer_assessment': {
+            'current_question': 0,
+            'answers': {},
+            'questions': None,
+            'loaded': False
+        },
+        'chat_history': []
+    }
     
-    # Generate QR code image
-    upi_url = f"upi://pay?pa=bexcybiju0209@oksbi&pn={name}&am={fee}&cu=INR&tr={transaction_id}&tn=HospitalAppointmentFee"
-    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=6, border=2)
-    qr.add_data(upi_url)
-    qr.make(fit=True)
-    qr_img = qr.make_image(fill_color="black", back_color="white")
-    
-    # Display in Streamlit
-    buf = BytesIO()
-    qr_img.save(buf, format="PNG")
-    img_bytes = buf.getvalue()
-    st.image(img_bytes, caption="Scan to Pay", width=150)
-    
-    return transaction_id
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
 
-def register_user():
-    """Compact user registration form"""
-    with st.form("user_registration"):
-        st.subheader("User Registration", divider='gray')
-        cols = st.columns(2)
-        with cols[0]:
-            name = st.text_input("Full Name", key="reg_name")
-            age = st.number_input("Age", min_value=1, max_value=120, key="reg_age")
-        with cols[1]:
-            gender = st.selectbox("Gender", ["Male", "Female", "Other"], key="reg_gender")
-            phone = st.text_input("Phone Number", key="reg_phone")
-        email = st.text_input("Email", key="reg_email")
-        
-        if st.form_submit_button("Register", use_container_width=True):
-            if name and age and gender and email and phone:
-                user_id = f"{name}_{int(time.time())}"
-                st.session_state.user_id = user_id
-                st.session_state.user_details = {
-                    "name": name,
-                    "age": age,
-                    "gender": gender.lower(),
-                    "email": email,
-                    "phone": phone
-                }
-                st.success("Registration successful!")
+def load_hospital_data():
+    """Fetch hospital data from backend"""
+    try:
+        response = requests.get(f"{BACKEND_URL}/hospitals/all")
+        if response.status_code == 200:
+            data = response.json()
+            if 'hospitals' in data:
+                departments = set()
+                for hospital in data['hospitals']:
+                    if hospital.get('Department'):
+                        departments.add(hospital['Department'].strip())
+                st.session_state.hospital_departments = sorted(departments)
+                st.session_state.hospital_data_loaded = True
                 return True
-            else:
-                st.error("Please fill all fields")
-                return False
-    return False
+        return False
+    except Exception as e:
+        st.error(f"Failed to load hospital data: {str(e)}")
+        return False
 
-def main_menu():
-    """Compact main menu after registration"""
-    st.sidebar.markdown("### Menu")
-    option = st.sidebar.radio("Services:", [
-        "Book Hospital Appointment",
-        "NCD Assessment",
-        "Cancer Assessment",
-        "General Medical Queries"
-    ], label_visibility="collapsed")
-    
-    if option == "Book Hospital Appointment":
-        st.session_state.current_service = "appointment"
-        book_appointment()
-    elif option == "NCD Assessment":
-        st.session_state.current_service = "ncd"
-        ncd_assessment()
-    elif option == "Cancer Assessment":
-        st.session_state.current_service = "cancer"
-        cancer_assessment()
-    elif option == "General Medical Queries":
-        st.session_state.current_service = "general"
-        general_queries()
+def load_ncd_questions():
+    """Fetch NCD questions from backend"""
+    try:
+        response = requests.get(f"{BACKEND_URL}/data/ncd_questions")
+        if response.status_code == 200:
+            st.session_state.ncd_assessment['questions'] = response.json().get('questions', [])
+            st.session_state.ncd_assessment['loaded'] = True
+            return True
+        return False
+    except Exception as e:
+        st.error(f"Failed to load NCD questions: {str(e)}")
+        return False
 
-def book_appointment():
-    """Compact hospital appointment booking flow"""
-    st.title("Book Hospital Appointment")
+def load_cancer_questions():
+    """Fetch Cancer questions from backend"""
+    try:
+        response = requests.get(f"{BACKEND_URL}/data/cancer_questions")
+        if response.status_code == 200:
+            st.session_state.cancer_assessment['questions'] = response.json().get('questions', [])
+            st.session_state.cancer_assessment['loaded'] = True
+            return True
+        return False
+    except Exception as e:
+        st.error(f"Failed to load Cancer questions: {str(e)}")
+        return False
+
+def show_appointment_booking():
+    st.subheader("🏥 Hospital Appointment Booking")
     
-    if 'appointment_stage' not in st.session_state:
-        st.session_state.appointment_stage = "questions"
-        st.session_state.appointment_answers = {}
-        st.session_state.question_index = 0
-    
-    if st.session_state.appointment_stage == "questions":
-        current_index = st.session_state.question_index
-        questions = appointment_service.appointment_questions
-        
-        if current_index < len(questions):
-            current_question = questions[current_index]
-            st.markdown(f"**{current_question['question']}**")
-            
-            if current_question["key"] == "day":
-                options = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-                answer = st.selectbox("Select day", options, key=f"appt_{current_question['key']}", label_visibility="collapsed")
-            elif current_question["key"] == "department":
-                departments = hospital_df['Department'].unique()
-                answer = st.selectbox("Select department", departments, key=f"appt_{current_question['key']}", label_visibility="collapsed")
-            elif current_question["key"] == "time":
-                answer = st.text_input("Enter time (HH:MM)", key=f"appt_{current_question['key']}", label_visibility="collapsed")
-            
-            if st.button("Next", use_container_width=True):
-                if current_question["key"] == "time" and not appointment_service.validate_time(answer):
-                    st.error("Please enter a valid time in HH:MM format (e.g., 10:00)")
-                else:
-                    st.session_state.appointment_answers[current_question["key"]] = answer
-                    st.session_state.question_index += 1
+    # Load hospital data if not loaded
+    if not st.session_state.hospital_data_loaded:
+        with st.spinner("Loading hospital data..."):
+            if not load_hospital_data():
+                st.error("Failed to load hospital data. Please try again later.")
+                if st.button("Back to Services"):
+                    st.session_state.current_service = None
                     st.rerun()
+                return
+    
+    if st.session_state.appointment_stage == "day_selection":
+        day = st.selectbox("Select day", st.session_state.available_days)
+        department = st.selectbox("Select department", st.session_state.hospital_departments)
+        time_slot = st.selectbox("Select time", ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"])
         
+        if st.button("Check Availability"):
+            try:
+                response = requests.get(
+                    f"{BACKEND_URL}/hospitals/availability",
+                    params={"day": day, "department": department, "time": time_slot}
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get('available'):
+                        st.session_state.appointment_stage = "slot_selection"
+                        st.session_state.appointment_data = {
+                            "day": day,
+                            "department": department,
+                            "time": time_slot,
+                            "options": data['hospitals']
+                        }
+                        st.rerun()
+                    else:
+                        st.warning("No availability for selected criteria")
+                else:
+                    st.error("Failed to check availability")
+            except Exception as e:
+                st.error(f"Error checking availability: {str(e)}")
+    
+    # Update the slot selection part in show_appointment_booking()
+    elif st.session_state.appointment_stage == "slot_selection":
+        st.write("Available slots:")
+        options = st.session_state.appointment_data['options']
+    
+        # Create a list of formatted options
+        slot_options = [f"{idx+1}. {opt['Hospital Name']} - Dr. {opt['Doctor']} ({opt['Time']})" 
+                   for idx, opt in enumerate(options)]
+    
+        # Use radio buttons for clearer selection
+        selected_slot = st.radio("Choose a hospital:", slot_options, index=None)
+    
+        if selected_slot:
+            selected_idx = slot_options.index(selected_slot)
+            st.session_state.appointment_data['selected_hospital'] = options[selected_idx]
+        
+            if st.button("Confirm Selection"):
+               st.session_state.appointment_stage = "confirm_details"
+               st.rerun()
         else:
-            st.session_state.appointment_stage = "select_hospital"
+            st.warning("Please select a hospital from the list")
+    
+        if st.button("Back to Options"):
+            st.session_state.appointment_stage = "day_selection"
             st.rerun()
     
-    elif st.session_state.appointment_stage == "select_hospital":
-        options, filtered_df = appointment_service.get_available_hospitals(st.session_state.appointment_answers)
+    elif st.session_state.appointment_stage == "confirm_details":
+        hospital = st.session_state.appointment_data['selected_hospital']
+        st.write("### Appointment Details")
+        st.write(f"**Hospital:** {hospital['Hospital Name']}")
+        st.write(f"**Department:** {hospital['Department']}")
+        st.write(f"**Doctor:** {hospital['Doctor']}")
+        st.write(f"**Day:** {st.session_state.appointment_data['day']}")
+        st.write(f"**Time:** {hospital['Time']}")
         
-        if filtered_df.empty:
-            st.error(options)
-            if st.button("Start Over", use_container_width=True):
-                st.session_state.appointment_stage = "questions"
-                st.session_state.question_index = 0
-                st.rerun()
-        else:
-            st.markdown("**Available hospitals:**")
-            st.dataframe(filtered_df[['Hospital Name', 'Doctor', 'Department', 'Time']], hide_index=True, use_container_width=True)
+        st.write("### Your Information")
+        st.write(f"**Name:** {st.session_state.user_details['name']}")
+        st.write(f"**Age:** {st.session_state.user_details['age']}")
+        
+        if st.button("Confirm Appointment"):
+            appointment_data = {
+                "user_id": st.session_state.user_id,
+                "user_name": st.session_state.user_details['name'],
+                "user_age": st.session_state.user_details['age'],
+                "hospital": hospital['Hospital Name'],
+                "department": hospital['Department'],
+                "doctor": hospital['Doctor'],
+                "day": st.session_state.appointment_data['day'],
+                "time": hospital['Time']
+            }
             
-            choice = st.selectbox(
-                "Select a hospital", 
-                range(1, len(filtered_df)+1),
-                format_func=lambda x: f"{x}. {filtered_df.iloc[x-1]['Hospital Name']} - {filtered_df.iloc[x-1]['Doctor']}",
-                label_visibility="collapsed"
-            )
-            
-            if st.button("Confirm", use_container_width=True):
-                st.session_state.selected_hospital = filtered_df.iloc[choice-1].to_dict()
+            # Process payment if needed (age 18-50)
+            if 18 <= st.session_state.user_details['age'] <= 50:
                 st.session_state.appointment_stage = "payment"
                 st.rerun()
+            else:
+                try:
+                    response = requests.post(
+                        f"{BACKEND_URL}/appointments/book",
+                        json=appointment_data
+                    )
+                    if response.status_code == 200:
+                        st.success("Appointment booked successfully!")
+                        time.sleep(2)
+                        st.session_state.current_service = None
+                        st.session_state.appointment_stage = None
+                        st.rerun()
+                    else:
+                        st.error("Failed to book appointment")
+                except Exception as e:
+                    st.error(f"Error booking appointment: {str(e)}")
     
+    # Update the payment part in show_appointment_booking()
     elif st.session_state.appointment_stage == "payment":
-        st.markdown("**Appointment Summary:**")
-        st.markdown(f"- Hospital: {st.session_state.selected_hospital['Hospital Name']}")
-        st.markdown(f"- Doctor: {st.session_state.selected_hospital['Doctor']}")
-        st.markdown(f"- Department: {st.session_state.selected_hospital['Department']}")
-        st.markdown(f"- Time: {st.session_state.selected_hospital['Time']}")
-        
-        age = st.session_state.user_details["age"]
-        if 18 <= age <= 50:
-            st.markdown("**Payment is required for your age group (18-50 years)**")
-            fee = 20.00
+        st.write("### Payment Required (₹20)")
+        st.write("Please complete the payment to confirm your appointment")
+    
+    # Generate QR code
+        st.image("https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=hospital@upi&pn=Hospital&am=20.00", 
+            caption="Scan to pay ₹20", width=200)
+    
+        if st.button("I've completed payment"):
+           try:
+              appointment_data = {
+                  "user_id": st.session_state.user_id,
+                  "user_name": st.session_state.user_details['name'],
+                  "user_age": st.session_state.user_details['age'],
+                  **st.session_state.appointment_data['selected_hospital'],
+                  "day": st.session_state.appointment_data['day']
+              }
             
-            if 'payment_done' not in st.session_state:
-                display_qr_code(st.session_state.user_details["name"], fee)
+              with st.spinner("Verifying payment..."):
+                response = requests.post(
+                    f"{BACKEND_URL}/appointments/book",
+                    json=appointment_data
+                )
                 
-                if st.button("I've made the payment", use_container_width=True):
-                    payment_success = True
-                    
-                    if payment_success:
-                        st.session_state.payment_done = True
-                        st.success("Payment verified!")
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get('success'):
+                        st.success(f"""
+                        Payment successful!
+                        Appointment confirmed:
+                        - Hospital: {result['details']['Hospital Name']}
+                        - Doctor: {result['details']['Doctor']}
+                        - Time: {result['details']['Time']}
+                        - Token: {result['token']}
+                        """)
+                        time.sleep(3)
+                        st.session_state.current_service = None
+                        st.session_state.appointment_stage = None
                         st.rerun()
                     else:
                         st.error("Payment verification failed. Please try again.")
-            else:
-                result = process_payment(
-                    age=age,
-                    name=st.session_state.user_details["name"],
-                    department=st.session_state.appointment_answers["department"],
-                    time_slot=st.session_state.appointment_answers["time"],
-                    hospital_info=st.session_state.selected_hospital
-                )
-                st.success(result)
-                st.session_state.appointment_stage = "completed"
-        else:
-            result = process_payment(
-                age=age,
-                name=st.session_state.user_details["name"],
-                department=st.session_state.appointment_answers["department"],
-                time_slot=st.session_state.appointment_answers["time"],
-                hospital_info=st.session_state.selected_hospital
-            )
-            st.success(result)
-            st.session_state.appointment_stage = "completed"
+                else:
+                    st.error("Failed to verify payment")
+           except Exception as e:
+               st.error(f"Error processing payment: {str(e)}")
     
-    elif st.session_state.appointment_stage == "completed":
-        st.success("Appointment booked successfully!")
-        if st.button("Back to Menu", use_container_width=True):
-            del st.session_state.appointment_stage
-            del st.session_state.appointment_answers
-            del st.session_state.question_index
-            if 'selected_hospital' in st.session_state:
-                del st.session_state.selected_hospital
-            if 'payment_done' in st.session_state:
-                del st.session_state.payment_done
-            st.rerun()
+        if st.button("Cancel Appointment"):
+           st.session_state.current_service = None
+           st.session_state.appointment_stage = None
+           st.rerun()
 
-def ncd_assessment():
-    """Compact NCD assessment flow"""
-    st.title("NCD Risk Assessment")
+def show_ncd_assessment():
+    st.subheader("💊 NCD Risk Assessment")
     
-    if 'ncd_stage' not in st.session_state:
-        st.session_state.ncd_stage = "start"
-        st.session_state.ncd_answers = {}
-        st.session_state.ncd_question_index = 0
-    
-    if st.session_state.ncd_stage == "start":
-        st.markdown("This assessment evaluates your risk factors for Non-Communicable Diseases (NCDs).")
-        if st.button("Begin Assessment", use_container_width=True):
-            st.session_state.ncd_stage = "assessment"
-            st.rerun()
-    
-    elif st.session_state.ncd_stage == "assessment":
-        current_index = st.session_state.ncd_question_index
-        questions = ncd_questions["questions"]
-        
-        if current_index < len(questions):
-            current_question = questions[current_index]
-            
-            if "depends_on" in current_question:
-                dependency_key = current_question["depends_on"]
-                condition = current_question["condition"]
-                if st.session_state.ncd_answers.get(dependency_key) != condition:
-                    st.session_state.ncd_question_index += 1
+    # Load questions if not loaded
+    if not st.session_state.ncd_assessment['loaded']:
+        with st.spinner("Loading assessment questions..."):
+            if not load_ncd_questions():
+                st.error("Failed to load assessment questions")
+                if st.button("Back to Services"):
+                    st.session_state.current_service = None
                     st.rerun()
-                    return
-            
-            st.markdown(f"**{current_question['question']}**")
-            
-            if current_question["valid_answers"] == "numeric":
-                answer = st.number_input("Enter your answer", min_value=0, key=f"ncd_{current_question['key']}", label_visibility="collapsed")
-            else:
-                answer = st.radio(
-                    "Select your answer", 
-                    current_question["valid_answers"],
-                    key=f"ncd_{current_question['key']}",
-                    label_visibility="collapsed",
-                    horizontal=True
-                )
-            
-            if st.button("Next", use_container_width=True):
-                st.session_state.ncd_answers[current_question["key"]] = answer
-                st.session_state.ncd_question_index += 1
-                st.rerun()
-        
-        else:
-            st.session_state.ncd_stage = "results"
-            st.rerun()
+                return
     
-    elif st.session_state.ncd_stage == "results":
-        result = ncd_service.generate_assessment_result(st.session_state.ncd_answers)
-        st.markdown(result)
-        
-        if st.button("Complete Assessment", use_container_width=True):
-            del st.session_state.ncd_stage
-            del st.session_state.ncd_answers
-            del st.session_state.ncd_question_index
-            st.rerun()
-
-def cancer_assessment():
-    """Compact cancer risk assessment flow"""
-    st.title("Cancer Risk Assessment")
+    questions = st.session_state.ncd_assessment['questions']
+    current_idx = st.session_state.ncd_assessment['current_question']
     
-    if 'cancer_stage' not in st.session_state:
-        st.session_state.cancer_stage = "start"
-        st.session_state.cancer_answers = {}
-        st.session_state.cancer_question_index = 0
-    
-    if st.session_state.cancer_stage == "start":
-        st.markdown("This assessment evaluates your risk factors for various types of cancer.")
-        if st.button("Begin Assessment", use_container_width=True):
-            st.session_state.cancer_stage = "assessment"
-            st.rerun()
-    
-    elif st.session_state.cancer_stage == "assessment":
-        current_index = st.session_state.cancer_question_index
-        questions = cancer_questions["questions"]
-        
-        if current_index < len(questions):
-            current_question = questions[current_index]
-            st.markdown(f"**{current_question['question']}**")
-            
-            answer = st.slider(
-                "Select your rating", 
-                min_value=0, 
-                max_value=9, 
-                key=f"cancer_{current_question['key']}",
-                label_visibility="collapsed"
+    # Check if assessment is complete
+    if current_idx >= len(questions):
+        try:
+            response = requests.post(
+                f"{BACKEND_URL}/assessments/ncd",
+                json={
+                    "user_id": st.session_state.user_id,
+                    "answers": st.session_state.ncd_assessment['answers']
+                }
             )
             
-            if st.button("Next", use_container_width=True):
-                st.session_state.cancer_answers[current_question["key"]] = answer
-                st.session_state.cancer_question_index += 1
-                st.rerun()
-        
-        else:
-            st.session_state.cancer_stage = "results"
+            if response.status_code == 200:
+                results = response.json().get('results', 'No results available')
+                st.success("Assessment complete!")
+                st.markdown(results)
+                
+                if st.button("Back to Services"):
+                    st.session_state.current_service = None
+                    st.session_state.ncd_assessment = {
+                        'current_question': 0,
+                        'answers': {},
+                        'questions': None,
+                        'loaded': False
+                    }
+                    st.rerun()
+            else:
+                st.error("Failed to get assessment results")
+        except Exception as e:
+            st.error(f"Error processing assessment: {str(e)}")
+        return
+    
+    current_question = questions[current_idx]
+    
+    # Check question dependencies
+    if 'depends_on' in current_question:
+        dep_key = current_question['depends_on']
+        dep_condition = current_question['condition']
+        if st.session_state.ncd_assessment['answers'].get(dep_key) != dep_condition:
+            st.session_state.ncd_assessment['current_question'] += 1
             st.rerun()
     
-    elif st.session_state.cancer_stage == "results":
-        risk = cancer_service.predict_cancer_risk(st.session_state.cancer_answers)
-        detailed_recommendations = cancer_service.generate_detailed_recommendations(st.session_state.cancer_answers)
-        
-        st.markdown(f"**Your predicted cancer risk level:** {risk}")
-        st.markdown(detailed_recommendations)
-        
-        if st.button("Complete Assessment", use_container_width=True):
-            del st.session_state.cancer_stage
-            del st.session_state.cancer_answers
-            del st.session_state.cancer_question_index
-            st.rerun()
+    st.write(f"Question {current_idx + 1}/{len(questions)}: {current_question['question']}")
+    
+    if current_question['valid_answers'] == "numeric":
+        answer = st.number_input("Your answer", min_value=0)
+    else:
+        answer = st.selectbox("Your answer", current_question['valid_answers'])
+    
+    if st.button("Submit Answer"):
+        st.session_state.ncd_assessment['answers'][current_question['key']] = answer
+        st.session_state.ncd_assessment['current_question'] += 1
+        st.rerun()
+    
+    if st.button("Back to Services"):
+        st.session_state.current_service = None
+        st.session_state.ncd_assessment = {
+            'current_question': 0,
+            'answers': {},
+            'questions': None,
+            'loaded': False
+        }
+        st.rerun()
 
-def general_queries():
-    """Compact general medical queries chat interface"""
-    st.title("Medical Assistant")
+def show_cancer_assessment():
+    st.subheader("🦠 Cancer Risk Assessment")
     
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+    # Load questions if not loaded
+    if not st.session_state.cancer_assessment['loaded']:
+        with st.spinner("Loading assessment questions..."):
+            if not load_cancer_questions():
+                st.error("Failed to load assessment questions")
+                if st.button("Back to Services"):
+                    st.session_state.current_service = None
+                    st.rerun()
+                return
     
-    for message in st.session_state.messages:
+    questions = st.session_state.cancer_assessment['questions']
+    current_idx = st.session_state.cancer_assessment['current_question']
+    
+    # Check if assessment is complete
+    if current_idx >= len(questions):
+        try:
+            response = requests.post(
+                f"{BACKEND_URL}/assessments/cancer",
+                json={
+                    "user_id": st.session_state.user_id,
+                    "answers": st.session_state.cancer_assessment['answers']
+                }
+            )
+            
+            if response.status_code == 200:
+                results = response.json().get('results', 'No results available')
+                st.success("Assessment complete!")
+                st.markdown(results)
+                
+                if st.button("Back to Services"):
+                    st.session_state.current_service = None
+                    st.session_state.cancer_assessment = {
+                        'current_question': 0,
+                        'answers': {},
+                        'questions': None,
+                        'loaded': False
+                    }
+                    st.rerun()
+            else:
+                st.error("Failed to get assessment results")
+        except Exception as e:
+            st.error(f"Error processing assessment: {str(e)}")
+        return
+    
+    current_question = questions[current_idx]
+    
+    st.write(f"Question {current_idx + 1}/{len(questions)}: {current_question['question']}")
+    answer = st.slider("Rate (0-9)", 0, 9, 5)
+    
+    if st.button("Submit Rating"):
+        st.session_state.cancer_assessment['answers'][current_question['key']] = answer
+        st.session_state.cancer_assessment['current_question'] += 1
+        st.rerun()
+    
+    if st.button("Back to Services"):
+        st.session_state.current_service = None
+        st.session_state.cancer_assessment = {
+            'current_question': 0,
+            'answers': {},
+            'questions': None,
+            'loaded': False
+        }
+        st.rerun()
+
+def show_general_query():
+    st.subheader("❓ General Medical Query")
+    
+    # Initialize chat if not exists
+    if 'chat_messages' not in st.session_state:
+        st.session_state.chat_messages = [
+            {"role": "assistant", "content": "Hi! I'm your health assistant. Ask me any medical questions."}
+        ]
+    
+    # Display chat messages
+    for message in st.session_state.chat_messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
     
-    if prompt := st.chat_input("Ask your medical question"):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        
+    # Input for new message
+    if prompt := st.chat_input("Type your medical question here"):
+        # Add user message to chat
+        st.session_state.chat_messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
         
-        query = QueryRequest(user_id=st.session_state.user_id, question=prompt)
-        response = rag_service.retrieve_relevant_info(query.question)
-        
-        with st.chat_message("assistant"):
-            st.markdown(response)
-        
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        # Get assistant response
+        with st.spinner("Thinking..."):
+            try:
+                response = requests.post(
+                    f"{BACKEND_URL}/chat/query",
+                    json={
+                        "user_id": st.session_state.user_id,
+                        "question": prompt
+                    }
+                )
+                
+                if response.status_code == 200:
+                    response_data = response.json()
+                    assistant_response = response_data.get("response", "I couldn't process your question.")
+                    
+                    # Add assistant response to chat
+                    st.session_state.chat_messages.append({"role": "assistant", "content": assistant_response})
+                    with st.chat_message("assistant"):
+                        st.markdown(assistant_response)
+                else:
+                    error_msg = "Sorry, I encountered an error processing your question."
+                    st.session_state.chat_messages.append({"role": "assistant", "content": error_msg})
+                    with st.chat_message("assistant"):
+                        st.markdown(error_msg)
+            
+            except Exception as e:
+                error_msg = f"Connection error: {str(e)}"
+                st.session_state.chat_messages.append({"role": "assistant", "content": error_msg})
+                with st.chat_message("assistant"):
+                    st.markdown(error_msg)
+    
+    if st.button("Back to Services", key="general_back"):
+        st.session_state.current_service = None
+        st.rerun()
 
-# Main app flow
 def main():
-
-    if not st.session_state.user_id:
-        if register_user():
-            st.rerun()
+    st.set_page_config(page_title="Health Assistant", page_icon="🩺")
+    st.title("Health Assistant")
+    
+    # Initialize session state
+    init_session_state()
+    
+    if not st.session_state.registered:
+        with st.form("registration_form"):
+            st.subheader("User Registration")
+            name = st.text_input("Full Name")
+            age = st.number_input("Age", min_value=1, max_value=120)
+            gender = st.selectbox("Gender", ["Male", "Female", "Other"])
+            email = st.text_input("Email")
+            
+            if st.form_submit_button("Register"):
+                st.session_state.user_details = {
+                    "name": name,
+                    "age": age,
+                    "gender": gender,
+                    "email": email
+                }
+                st.session_state.user_id = f"user_{int(time.time())}"
+                st.session_state.registered = True
+                st.success("Registration successful!")
+                time.sleep(1)
+                st.rerun()
     else:
-        st.sidebar.markdown(f"**Welcome, {st.session_state.user_details['name']}!**")
-        if st.sidebar.button("Logout", use_container_width=True):
-            st.session_state.clear()
-            st.rerun()
-
-        main_menu()
+        if not st.session_state.current_service:
+            st.subheader(f"Welcome, {st.session_state.user_details['name']}!")
+            st.write("How can I help you today?")
+            
+            cols = st.columns(2)
+            with cols[0]:
+                if st.button("🏥 Hospital Appointment", use_container_width=True):
+                    st.session_state.current_service = "appointment"
+                    st.session_state.appointment_stage = "day_selection"
+                    st.rerun()
+            
+            with cols[0]:
+                if st.button("💊 NCD Assessment", use_container_width=True):
+                    st.session_state.current_service = "ncd"
+                    st.rerun()
+            
+            with cols[1]:
+                if st.button("🦠 Cancer Assessment", use_container_width=True):
+                    st.session_state.current_service = "cancer"
+                    st.rerun()
+            
+            with cols[1]:
+                if st.button("❓ General Medical Query", use_container_width=True):
+                    st.session_state.current_service = "general"
+                    st.rerun()
+        else:
+            if st.session_state.current_service == "appointment":
+                show_appointment_booking()
+            elif st.session_state.current_service == "ncd":
+                show_ncd_assessment()
+            elif st.session_state.current_service == "cancer":
+                show_cancer_assessment()
+            elif st.session_state.current_service == "general":
+                show_general_query()
 
 if __name__ == "__main__":
     main()

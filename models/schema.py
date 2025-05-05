@@ -10,3 +10,9 @@ class RegisterRequest(BaseModel):
     phone: str
     age: int
     gender: str
+
+class UserRegistration(BaseModel):
+    name: str
+    age: int
+    gender: str
+    email: str
