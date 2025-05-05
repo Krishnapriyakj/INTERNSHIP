@@ -4,7 +4,7 @@ import time
 import uuid
 import matplotlib.pyplot as plt
 
-UPI_ID = "bexcybiju0209@oksbi"
+UPI_ID = 'upiid@okbank'
 token_tracker = {}
 
 def calculate_fee(age: int) -> float:
